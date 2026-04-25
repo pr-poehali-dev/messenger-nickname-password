@@ -1,0 +1,48 @@
+{
+  "tests": [
+    {
+      "name": "Register new user",
+      "method": "POST",
+      "path": "/?action=register",
+      "body": {"username": "testuser123", "password": "pass1234"},
+      "expectedStatus": 200,
+      "expectedBody": {"token": "string", "username": "testuser123"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Login existing user",
+      "method": "POST",
+      "path": "/?action=login",
+      "body": {"username": "testuser123", "password": "pass1234"},
+      "expectedStatus": 200,
+      "expectedBody": {"token": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Register duplicate username",
+      "method": "POST",
+      "path": "/?action=register",
+      "body": {"username": "testuser123", "password": "otherpass"},
+      "expectedStatus": 409,
+      "expectedBody": {"error": "Ник уже занят"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Login wrong password",
+      "method": "POST",
+      "path": "/?action=login",
+      "body": {"username": "testuser123", "password": "wrongpassword"},
+      "expectedStatus": 401,
+      "expectedBody": {"error": "Неверный ник или пароль"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Me without token",
+      "method": "GET",
+      "path": "/?action=me",
+      "expectedStatus": 401,
+      "expectedBody": {"error": "Не авторизован"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

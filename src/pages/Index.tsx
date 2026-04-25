@@ -1,6 +1,124 @@
 import { useState, useRef, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 
+const AUTH_URL = "https://functions.poehali.dev/e2057fd0-b6bf-44f9-bf49-98f5182a5a37";
+
+const TOKEN_KEY = "waves_token";
+const USER_KEY = "waves_user";
+
+async function apiAuth(action: string, body?: object, token?: string) {
+  const res = await fetch(`${AUTH_URL}/?action=${action}`, {
+    method: body ? "POST" : "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { "X-Auth-Token": token } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Ошибка сервера");
+  return data;
+}
+
+interface AuthUser {
+  id: number;
+  username: string;
+  token: string;
+}
+
+function AuthScreen({ onAuth }: { onAuth: (user: AuthUser) => void }) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const data = await apiAuth(mode, { username, password });
+      localStorage.setItem(TOKEN_KEY, data.token);
+      localStorage.setItem(USER_KEY, JSON.stringify({ id: data.id, username: data.username }));
+      onAuth({ id: data.id, username: data.username, token: data.token });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Ошибка");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+      <div className="w-full max-w-sm animate-slide-up">
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: "hsl(var(--primary))" }}>
+            <Icon name="Waves" size={26} className="text-white" />
+          </div>
+          <h1 className="text-2xl font-bold">Waves</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {mode === "login" ? "Вход в аккаунт" : "Создать аккаунт"}
+          </p>
+        </div>
+
+        <form onSubmit={submit} className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Ник</label>
+            <input
+              type="text"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              placeholder="минимум 3 символа"
+              className="w-full px-4 py-2.5 text-sm bg-muted rounded-xl outline-none border border-transparent focus:border-primary transition-colors placeholder:text-muted-foreground"
+              autoComplete="username"
+              required
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Пароль</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="минимум 4 символа"
+              className="w-full px-4 py-2.5 text-sm bg-muted rounded-xl outline-none border border-transparent focus:border-primary transition-colors placeholder:text-muted-foreground"
+              autoComplete={mode === "register" ? "new-password" : "current-password"}
+              required
+            />
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 rounded-xl px-3 py-2">
+              <Icon name="AlertCircle" size={15} />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-60"
+            style={{ background: "hsl(var(--primary))" }}
+          >
+            {loading ? "Загрузка..." : mode === "login" ? "Войти" : "Зарегистрироваться"}
+          </button>
+        </form>
+
+        <p className="text-center text-sm text-muted-foreground mt-4">
+          {mode === "login" ? "Нет аккаунта?" : "Уже есть аккаунт?"}{" "}
+          <button
+            onClick={() => { setMode(m => m === "login" ? "register" : "login"); setError(""); }}
+            className="text-primary font-medium hover:underline"
+          >
+            {mode === "login" ? "Зарегистрироваться" : "Войти"}
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+}
+
 type Tab = "chats" | "contacts" | "search" | "profile" | "settings";
 type Theme = "light" | "dark";
 
@@ -155,6 +273,15 @@ function Avatar({ initials, size = "md", online }: { initials: string; size?: "s
 }
 
 export default function Index() {
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const userRaw = localStorage.getItem(USER_KEY);
+    if (token && userRaw) {
+      try { return { ...JSON.parse(userRaw), token }; } catch { return null; }
+    }
+    return null;
+  });
+
   const [tab, setTab] = useState<Tab>("chats");
   const [theme, setTheme] = useState<Theme>("light");
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
@@ -175,6 +302,10 @@ export default function Index() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeChat]);
+
+  if (!authUser) {
+    return <AuthScreen onAuth={setAuthUser} />;
+  }
 
   function sendMessage() {
     if (!inputText.trim() || !activeChat) return;
@@ -420,18 +551,17 @@ export default function Index() {
               </div>
               <div className="flex-1 overflow-y-auto scrollbar-hide px-4">
                 <div className="flex flex-col items-center py-6 gap-3">
-                  <div className="w-20 h-20 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-2xl font-bold">
-                    ВЫ
+                  <div className={`w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-bold ${getColor(authUser.username)}`}>
+                    {authUser.username.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="text-center">
-                    <div className="font-semibold text-lg">Иван Иванов</div>
+                    <div className="font-semibold text-lg">@{authUser.username}</div>
                     <div className="text-sm text-emerald-500">в сети</div>
                   </div>
                 </div>
                 <div className="space-y-3 mt-2">
                   {[
-                    { icon: "Phone", label: "Телефон", value: "+7 999 000-00-00" },
-                    { icon: "AtSign", label: "Юзернейм", value: "@ivanov" },
+                    { icon: "AtSign", label: "Ник", value: `@${authUser.username}` },
                     { icon: "Info", label: "О себе", value: "Привет! Я использую Waves" },
                   ].map(item => (
                     <div key={item.label} className="flex items-center gap-3 p-3 rounded-xl bg-muted/50">
@@ -443,8 +573,15 @@ export default function Index() {
                     </div>
                   ))}
                 </div>
-                <button className="mt-4 w-full py-2.5 rounded-xl text-sm font-medium border border-border hover:bg-muted transition-colors">
-                  Редактировать профиль
+                <button
+                  onClick={() => {
+                    localStorage.removeItem(TOKEN_KEY);
+                    localStorage.removeItem(USER_KEY);
+                    setAuthUser(null);
+                  }}
+                  className="mt-4 w-full py-2.5 rounded-xl text-sm font-medium text-destructive border border-destructive/30 hover:bg-destructive/10 transition-colors"
+                >
+                  Выйти из аккаунта
                 </button>
               </div>
             </div>
@@ -463,7 +600,6 @@ export default function Index() {
                   { icon: "Palette", label: "Оформление", desc: "Тема и шрифты" },
                   { icon: "Smartphone", label: "Устройства", desc: "Активные сессии" },
                   { icon: "HelpCircle", label: "Помощь", desc: "FAQ и поддержка" },
-                  { icon: "LogOut", label: "Выйти", desc: "Завершить сеанс" },
                 ].map(item => (
                   <button key={item.label} className="w-full flex items-center gap-3 p-3.5 rounded-xl hover:bg-muted/60 transition-colors text-left">
                     <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center shrink-0">
@@ -476,6 +612,22 @@ export default function Index() {
                     <Icon name="ChevronRight" size={16} className="ml-auto text-muted-foreground" />
                   </button>
                 ))}
+                <button
+                  onClick={() => {
+                    localStorage.removeItem(TOKEN_KEY);
+                    localStorage.removeItem(USER_KEY);
+                    setAuthUser(null);
+                  }}
+                  className="w-full flex items-center gap-3 p-3.5 rounded-xl hover:bg-destructive/10 transition-colors text-left"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
+                    <Icon name="LogOut" size={18} className="text-destructive" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-destructive">Выйти</div>
+                    <div className="text-xs text-muted-foreground">Завершить сеанс</div>
+                  </div>
+                </button>
 
                 <div className="mt-2 p-3.5 rounded-xl bg-muted/50">
                   <div className="flex items-center justify-between">
