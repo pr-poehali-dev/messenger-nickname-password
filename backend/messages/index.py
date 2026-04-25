@@ -136,7 +136,7 @@ def get_history(conn, cur, user_id, with_user_id):
         return err(400, "invalid with_user_id")
 
     cur.execute(f"""
-        SELECT id, from_user_id, to_user_id, text, created_at, is_read
+        SELECT id, from_user_id, to_user_id, text, created_at, is_read, media_url, media_type
         FROM {SCHEMA}.messages
         WHERE (from_user_id = %s AND to_user_id = %s)
            OR (from_user_id = %s AND to_user_id = %s)
@@ -164,6 +164,8 @@ def get_history(conn, cur, user_id, with_user_id):
             "text": row[3],
             "time": str(row[4]),
             "is_read": row[5],
+            "media_url": row[6],
+            "media_type": row[7],
         })
 
     return ok({
@@ -175,11 +177,13 @@ def get_history(conn, cur, user_id, with_user_id):
 def send_message(conn, cur, user_id, body):
     to_id = body.get("to_user_id")
     text = (body.get("text") or "").strip()
+    media_url = body.get("media_url") or None
+    media_type = body.get("media_type") or None
 
-    if not to_id or not text:
+    if not to_id or (not text and not media_url):
         conn.close()
-        return err(400, "to_user_id и text обязательны")
-    if len(text) > 4000:
+        return err(400, "to_user_id и text или media_url обязательны")
+    if text and len(text) > 4000:
         conn.close()
         return err(400, "Сообщение слишком длинное")
 
@@ -199,14 +203,14 @@ def send_message(conn, cur, user_id, body):
         return err(404, "Получатель не найден")
 
     cur.execute(
-        f"INSERT INTO {SCHEMA}.messages (from_user_id, to_user_id, text) VALUES (%s, %s, %s) RETURNING id, created_at",
-        (user_id, to_id, text)
+        f"INSERT INTO {SCHEMA}.messages (from_user_id, to_user_id, text, media_url, media_type) VALUES (%s, %s, %s, %s, %s) RETURNING id, created_at",
+        (user_id, to_id, text or None, media_url, media_type)
     )
     msg_id, created_at = cur.fetchone()
     conn.commit()
     conn.close()
 
-    return ok({"id": msg_id, "time": str(created_at), "text": text})
+    return ok({"id": msg_id, "time": str(created_at), "text": text, "media_url": media_url, "media_type": media_type})
 
 
 def get_users(conn, cur, user_id):

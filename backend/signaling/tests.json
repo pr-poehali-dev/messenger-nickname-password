@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "Poll signals without token",
+      "method": "GET",
+      "path": "/?action=poll_signals",
+      "expectedStatus": 401,
+      "expectedBody": {"error": "Не авторизован"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
