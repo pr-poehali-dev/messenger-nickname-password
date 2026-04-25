@@ -1,0 +1,20 @@
+{
+  "tests": [
+    {
+      "name": "Get chats without token",
+      "method": "GET",
+      "path": "/?action=chats",
+      "expectedStatus": 401,
+      "expectedBody": {"error": "Не авторизован"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get users without token",
+      "method": "GET",
+      "path": "/?action=users",
+      "expectedStatus": 401,
+      "expectedBody": {"error": "Не авторизован"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
